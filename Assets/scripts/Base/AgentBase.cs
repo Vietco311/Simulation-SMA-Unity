@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections;
 using System;
 using UnityEngine.UIElements;
-using static RoleBase;
 using System.Data;
 
 public class AgentBase : MonoBehaviour
@@ -19,6 +18,7 @@ public class AgentBase : MonoBehaviour
     protected AgentBase half;
     public Queue<Action> actionQueue = new Queue<Action>();
     private Queue<Action> tempActionQueue = new Queue<Action>();
+    protected bool canProcreate = true;
 
     public ConstructionRequest currentRequest;
     public ConstructionRequest CurrentRequest { get => currentRequest; set => currentRequest = value; }
@@ -26,11 +26,23 @@ public class AgentBase : MonoBehaviour
     public string AgentRole { get; set; }
 
     public float energy = 100f;
-    private float energyDecreaseRate = 1f; 
-    private float restEnergyIncreaseRate = 5f;
-    private Coroutine lastCoroutine;
+    protected float energyDecreaseRate = 1f;
+    protected float restEnergyIncreaseRate = 5f;
+    protected Coroutine lastCoroutine;
+    public AgentState currentState = AgentState.Idle;
     public Coroutine LastCoroutine { get => lastCoroutine; set => lastCoroutine = value; }
-    private bool isResting = false;
+
+    public enum AgentState
+    {
+        Idle,
+        Moving,
+        GatheringResources,
+        DeliveringResources,
+        BuildingHouse,
+        Resting,
+        CollectingResources,
+        SleepingOnGround
+    }
 
     private void Awake()
     {
@@ -44,13 +56,13 @@ public class AgentBase : MonoBehaviour
 
     protected virtual void Update()
     {
-        if (isResting) return;
-        DecreaseEnergy();
+        if (currentState == AgentState.Resting) return;
+        ReduceEnergyBasedOnState();
 
         // Prioriser le repos si l'énergie est faible
         if (energy <= 20f && assignedHouse != null && !IsResting() && !IsSleepingOnGround())
         {
-            Rest();
+            MoveToHouseAndRest();
         }
         else if (energy == 0f && !IsSleepingOnGround())
         {
@@ -58,7 +70,6 @@ public class AgentBase : MonoBehaviour
         }
         else if (actionQueue.Count > 0 && !isMoving)
         {
-            Debug.Log("Action en cours d'exécution.");
             Action currentAction = actionQueue.Dequeue();
             currentAction.Invoke();
         }
@@ -74,32 +85,57 @@ public class AgentBase : MonoBehaviour
         }
     }
 
-    public bool IsResting()
+    private void ReduceEnergyBasedOnState()
     {
-        RoleBase role = gameObject.GetComponent<RoleBase>();
-        return role.currentState == AgentState.Resting;
-    }
+        float energyReductionRate = 0f;
 
-    public bool IsSleepingOnGround()
-    {
-        RoleBase role = gameObject.GetComponent<RoleBase>();
-        return role.currentState == AgentState.SleepingOnGround;
-    }
+        switch (currentState)
+        {
+            case AgentState.Idle:
+                energyReductionRate = 0.5f;
+                break;
+            case AgentState.Moving:
+                energyReductionRate = 1.5f;
+                break;
+            case AgentState.GatheringResources:
+                energyReductionRate = 2.0f;
+                break;
+            case AgentState.DeliveringResources:
+                energyReductionRate = 1.8f;
+                break;
+            case AgentState.BuildingHouse:
+                energyReductionRate = 2.5f;
+                break;
+            case AgentState.CollectingResources:
+                energyReductionRate = 1.5f;
+                break;
+            case AgentState.SleepingOnGround:
+                energyReductionRate = 0f;
+                break;
+        }
 
-    private void DecreaseEnergy()
-    {
-        energy -= energyDecreaseRate * Time.deltaTime;
+        energy -= energyReductionRate * Time.deltaTime;
         if (energy < 0f)
         {
             energy = 0f;
         }
     }
 
-    private void Rest()
+    public bool IsResting()
     {
-        if (isResting) return;
+        return currentState == AgentState.Resting;
+    }
 
-        isResting = true;
+    public bool IsSleepingOnGround()
+    {
+        return currentState == AgentState.SleepingOnGround;
+    }
+
+    public void Rest()
+    {
+        if (currentState == AgentState.Resting) return;
+
+        currentState = AgentState.Resting;
         InterruptCurrentAction();
 
         while (actionQueue.Count > 0)
@@ -119,8 +155,7 @@ public class AgentBase : MonoBehaviour
 
     private IEnumerator RestCoroutine(AgentState restingState, float energyIncreaseRate)
     {
-        RoleBase role = gameObject.GetComponent<RoleBase>();
-        role.currentState = restingState;
+        currentState = restingState;
 
         while (energy < 100f)
         {
@@ -128,12 +163,11 @@ public class AgentBase : MonoBehaviour
             yield return null;
         }
 
-        role.currentState = AgentState.Idle;
+        currentState = AgentState.Idle;
         while (tempActionQueue.Count > 0)
         {
             actionQueue.Enqueue(tempActionQueue.Dequeue());
         }
-        isResting = false; // Fin du repos
     }
 
     public void QueueAction(Action newAction, bool isPriority = false)
@@ -141,6 +175,13 @@ public class AgentBase : MonoBehaviour
         if (!isPriority && actionQueue.Count >= 4)
         {
             Debug.LogWarning("La file d'attente des actions non prioritaires est pleine. Impossible d'ajouter une nouvelle action.");
+            return;
+        }
+
+        // Vérifier si une action similaire est déjà présente dans la file d'attente
+        if (actionQueue.Contains(newAction))
+        {
+            Debug.LogWarning("Action similaire déjà présente dans la file d'attente. Ignorée.");
             return;
         }
 
@@ -176,11 +217,47 @@ public class AgentBase : MonoBehaviour
             StopCoroutine(lastCoroutine);
         }
         isMoving = false;
-        RoleBase role = gameObject.GetComponent<RoleBase>();
-        role.currentState = AgentState.Idle;
     }
 
+    public void MoveTo(Vector3 targetPosition)
+    {
+        if (this != null && gameObject != null)
+        {
+            lastCoroutine = StartCoroutine(MoveTowardsPosition(targetPosition));
+        }
+    }
 
+    private IEnumerator MoveTowardsPosition(Vector3 targetPosition)
+    {
+        isMoving = true;
+        while (Vector3.Distance(transform.position, targetPosition) > 0.1f)
+        {
+            currentState = AgentState.Moving;
+            transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
+            yield return null;
+        }
+        isMoving = false;
+        currentState = AgentState.Idle;
+    }
+
+    private void InitializeAgent()
+    {
+        spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer == null)
+        {
+            Debug.LogError("No SpriteRenderer found on the agent!");
+        }
+        inventory.Add("Wood", 0);
+        inventory.Add("Stone", 0);
+    }
+
+    public int GetTotalWeight()
+    {
+        int woodWeight = inventory.ContainsKey("Wood") ? inventory["Wood"] : 0;
+        int stoneWeight = inventory.ContainsKey("Stone") ? inventory["Stone"] * 2 : 0;
+
+        return woodWeight + stoneWeight;
+    }
 
     private AgentBase FindPotentialPartner()
     {
@@ -225,7 +302,6 @@ public class AgentBase : MonoBehaviour
             constructionManager.RequestHouse(houseType, housePosition, new List<AgentBase> { this, half });
             Debug.Log($"{gameObject.name} a demandé une maison.");
         }
-
     }
 
     public Vector3 DetermineHousePosition()
@@ -253,50 +329,6 @@ public class AgentBase : MonoBehaviour
         }
     }
 
-    public void ChangeRole(string newRole)
-    {
-        Debug.Log($"Début du changement de rôle en : {newRole}");
-
-        switch (newRole)
-        {
-            case "Collector":
-                gameObject.AddComponent<CollectorAgent>();
-                SetColor(Color.green);
-                agentRole = "Collector";
-                Debug.Log("Nouveau rôle assigné : CollectorAgent");
-                break;
-            case "Builder":
-                gameObject.AddComponent<BuilderAgent>();
-                SetColor(Color.blue);
-                agentRole = "Builder";
-                Debug.Log("Nouveau rôle assigné : BuilderAgent");
-                break;
-            case "Explorer":
-                gameObject.AddComponent<ExplorerAgent>();
-                SetColor(Color.yellow);
-                agentRole = "Explorer";
-                Debug.Log("Nouveau rôle assigné : ExplorerAgent");
-                break;
-            case "Delivery":
-                gameObject.AddComponent<DeliveringAgent>();
-                SetColor(Color.red);
-                agentRole = "Delivery";
-                Debug.Log("Nouveau rôle assigné : DeliveringAgent");
-                break;
-            case "Jobless":
-                gameObject.AddComponent<JoblessAgent>();
-                SetColor(Color.gray);
-                agentRole = "Jobless";
-                Debug.Log("Nouveau rôle assigné : JoblessAgent");
-                break;
-            default:
-                Debug.LogWarning($"Rôle non pris en charge : {newRole}");
-                break;
-        }
-
-        Debug.Log($"Fin du changement de rôle en : {newRole}");
-    }
-
     protected void SetColor(Color color)
     {
         if (spriteRenderer != null)
@@ -305,44 +337,57 @@ public class AgentBase : MonoBehaviour
         }
     }
 
-    public void MoveTo(Vector3 targetPosition)
+    private void MoveToHouseAndRest()
     {
-        if (this != null && gameObject != null)
+        if (assignedHouse != null)
         {
-            lastCoroutine = StartCoroutine(MoveTowardsPosition(targetPosition));
+            MoveTo(assignedHouse.transform.position);
+            if (Vector3.Distance(transform.position, assignedHouse.transform.position) < 1.0f)
+            {
+                Rest();
+            }
         }
     }
 
-    private IEnumerator MoveTowardsPosition(Vector3 targetPosition)
+    protected bool CanProcreate()
     {
-        RoleBase role = gameObject.GetComponent<RoleBase>();
-        isMoving = true;
-        while (Vector3.Distance(transform.position, targetPosition) > 0.1f)
-        {
-            role.currentState = AgentState.Moving;
-            transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
-            yield return null;
-        }
-        isMoving = false;
-        role.currentState = AgentState.Idle;
+        return assignedHouse != null && half != null && half.assignedHouse == assignedHouse && energy >= 60f && half.energy >= 60f && canProcreate && half.canProcreate;
     }
 
-    private void InitializeAgent()
+    protected IEnumerator ProcreateCoroutine()
     {
-        spriteRenderer = GetComponent<SpriteRenderer>();
-        if (spriteRenderer == null)
+        Debug.Log($"{gameObject.name} et {half.gameObject.name} commencent à procréer !");
+        currentState = AgentState.Idle;
+        half.currentState = AgentState.Idle;
+
+        yield return new WaitForSeconds(10);
+
+        Debug.Log($"{gameObject.name} et {half.gameObject.name} ont procréé !");
+        Vector3 spawnPosition = assignedHouse.transform.position + new Vector3(1, 0, 0);
+        GameObject newAgent = Instantiate(gameObject, spawnPosition, Quaternion.identity);
+        SimpleAgent newSimpleAgent = newAgent.GetComponent<SimpleAgent>();
+        newSimpleAgent.half = null;
+        newSimpleAgent.assignedHouse = null;
+        newSimpleAgent.energy = 100f;
+
+
+        if (UnityEngine.Random.value < 0.1f) 
         {
-            Debug.LogError("No SpriteRenderer found on the agent!");
+            GameObject twinAgent = Instantiate(gameObject, spawnPosition + new Vector3(1, 0, 0), Quaternion.identity);
+            SimpleAgent newTwinAgent = twinAgent.GetComponent<SimpleAgent>();
+            newTwinAgent.half = null;
+            newTwinAgent.assignedHouse = null;
+            newTwinAgent.energy = 100f;
+            Debug.Log($"{gameObject.name} et {half.gameObject.name} ont eu des jumeaux !");
         }
-        inventory.Add("Wood", 0);
-        inventory.Add("Stone", 0);
-    }
 
-    public int GetTotalWeight()
-    {
-        int woodWeight = inventory["Wood"];
-        int stoneWeight = inventory["Stone"] * 2;
+        energy -= 20f;
+        half.energy -= 20f;
 
-        return woodWeight + stoneWeight;
+        canProcreate = false;
+        half.canProcreate = false;
+        yield return new WaitForSeconds(60);
+        canProcreate = true;
+        half.canProcreate = true;
     }
 }

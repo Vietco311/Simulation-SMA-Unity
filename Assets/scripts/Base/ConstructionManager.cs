@@ -10,9 +10,10 @@ public class ConstructionManager : MonoBehaviour
     public Queue<ConstructionRequest> requests = new Queue<ConstructionRequest>();
     public GameObject woodHousePrefab;
     public GameObject stoneHousePrefab;
-
+    public delegate void ConstructionRequestAddedHandler(ConstructionRequest request);
+    public event ConstructionRequestAddedHandler OnConstructionRequestAdded;
     private Dictionary<string, Dictionary<string, int>> houseResourceRequirements;
-    private List<BuilderAgent> busyBuilders = new List<BuilderAgent>();
+    private List<AgentBase> busyAgents = new List<AgentBase>();
 
     private void Awake()
     {
@@ -31,10 +32,10 @@ public class ConstructionManager : MonoBehaviour
     private void InitializeHouseResourceRequirements()
     {
         houseResourceRequirements = new Dictionary<string, Dictionary<string, int>>
-                        {
-                            { "Wood", new Dictionary<string, int> { { "Wood", 30 }, { "Stone", 0 } } },
-                            { "Stone", new Dictionary<string, int> { { "Wood", 15 }, { "Stone", 30 } } }
-                        };
+                                {
+                                    { "Wood", new Dictionary<string, int> { { "Wood", 30 }, { "Stone", 0 } } },
+                                    { "Stone", new Dictionary<string, int> { { "Wood", 15 }, { "Stone", 30 } } }
+                                };
     }
 
     private void Update()
@@ -46,11 +47,11 @@ public class ConstructionManager : MonoBehaviour
     {
         if (requests.Count > 0)
         {
-            BuilderAgent availableBuilder = FindAvailableBuilder();
-            if (availableBuilder != null)
+            AgentBase availableAgent = FindAvailableAgent();
+            if (availableAgent != null)
             {
                 var request = requests.Dequeue();
-                ProcessConstructionRequest(request, availableBuilder);
+                ProcessConstructionRequest(request, availableAgent);
             }
         }
     }
@@ -82,48 +83,53 @@ public class ConstructionManager : MonoBehaviour
         }
     }
 
-    public void AddBusyBuilder(BuilderAgent builder, ConstructionRequest request)
+    public void AddBusyAgent(AgentBase agent, ConstructionRequest request)
     {
-        if (!busyBuilders.Contains(builder))
+        if (!busyAgents.Contains(agent))
         {
-            builder.buildingRequest = request;
-            busyBuilders.Add(builder);
+            agent.currentRequest = request;
+            busyAgents.Add(agent);
         }
     }
 
-    public void RemoveBusyBuilder(BuilderAgent builder)
+    public void RemoveBusyAgent(AgentBase agent)
     {
-        if (busyBuilders.Contains(builder))
+        if (busyAgents.Contains(agent))
         {
-            busyBuilders.Remove(builder);
+            busyAgents.Remove(agent);
         }
         else
         {
-            Debug.LogWarning("Le constructeur n'est pas dans la liste des constructeurs occupés.");
+            Debug.LogWarning("L'agent n'est pas dans la liste des agents occupés.");
         }
     }
 
-    private BuilderAgent FindAvailableBuilder()
+    private AgentBase FindAvailableAgent()
     {
-        // Trouver un constructeur disponible
-        var allBuilders = FindObjectsByType<BuilderAgent>(FindObjectsSortMode.None);
-        return allBuilders.FirstOrDefault(builder => !busyBuilders.Contains(builder));
+        // Trouver un agent disponible
+        var allAgents = FindObjectsByType<AgentBase>(FindObjectsSortMode.None);
+        return allAgents.FirstOrDefault(agent => !busyAgents.Contains(agent));
     }
 
-    private void ProcessConstructionRequest(ConstructionRequest request, BuilderAgent builder)
+    private void ProcessConstructionRequest(ConstructionRequest request, AgentBase agent)
     {
-        AddBusyBuilder(builder, request);
+        AddBusyAgent(agent, request);
         request.SetToReady();
-        DeliveringAgent.AddDeliverRequest(request);
     }
 
     public void RequestHouse(string houseType, Vector3 housePosition, List<AgentBase> coupleAgents)
     {
-        // Création d'un GameObject temporaire pour ajouter le composant ConstructionRequest
         GameObject requestObject = new GameObject("ConstructionRequest");
         ConstructionRequest newRequest = requestObject.AddComponent<ConstructionRequest>();
 
-        newRequest.HouseType = houseType;
+        if (houseType == "Wood")
+        {
+            newRequest.ConstructedHouse = woodHousePrefab;
+        }
+        else if (houseType == "Stone")
+        {
+            newRequest.ConstructedHouse = stoneHousePrefab;
+        }
         newRequest.ConstructionSitePosition = housePosition;
         newRequest.CoupleAgents = coupleAgents;
         newRequest.SetResourcesNeeded(houseResourceRequirements[houseType]);
@@ -132,6 +138,11 @@ public class ConstructionManager : MonoBehaviour
             agentCouple.CurrentRequest = newRequest;
         }
         requests.Enqueue(newRequest);
+
+        OnConstructionRequestAdded?.Invoke(newRequest);
+
+        // Abonner l'événement OnResourcesNeeded à la méthode HandleNewDeliverRequest
+        newRequest.OnResourcesNeeded += DeliveringAgent.HandleNewDeliverRequest;
     }
 
     public Dictionary<string, int> GetAvailableResources()

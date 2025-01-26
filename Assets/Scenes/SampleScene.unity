@@ -340,6 +340,51 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1192435384
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1192435386}
+  - component: {fileID: 1192435385}
+  m_Layer: 0
+  m_Name: Launcher
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1192435385
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1192435384}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d57220e8268fb141833b902495be1f6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  grid: {fileID: 1359760763}
+--- !u!4 &1192435386
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1192435384}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 2.3118286, y: 1.4173884, z: -0.10268083}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1357174571
 GameObject:
   m_ObjectHideFlags: 0
@@ -528,7 +573,12 @@ MonoBehaviour:
   width: 30
   height: 30
   tilePrefab: {fileID: 4854902042547622872, guid: fec02f3c2b813a54dbcad6697e3b699c, type: 3}
-  agentPrefab: {fileID: 6374855647699858727, guid: 249428c27587aaa4cbb4ad1b35aeeff7, type: 3}
+  builderPrefab: {fileID: 7758908343850110794, guid: 9234f987efbe3b042a1a2f5c32cd3310, type: 3}
+  explorerPrefab: {fileID: 7758908343850110794, guid: 52be60f9062f0574b9a1fa1bdde28dac, type: 3}
+  deliveringPrefab: {fileID: 7758908343850110794, guid: 53aa0a5906ca8234680b83d2818a123d, type: 3}
+  collectorPrefab: {fileID: 7758908343850110794, guid: 1ca9887ade99fa54f838a22c13442232, type: 3}
+  joblessPrefab: {fileID: 6374855647699858727, guid: 5f5d509e5699c1548b088a4361201357, type: 3}
+  villagerPrefab: {fileID: 6374855647699858727, guid: c23046a30c6e6a249952bb9f1536f762, type: 3}
   woodStoragePrefab: {fileID: 5133897973026498176, guid: a8515d912a7d05f469b36a59968c722b, type: 3}
   stoneStoragePrefab: {fileID: 5133897973026498176, guid: 54f584c34ede6c84c96bb401d4440880, type: 3}
 --- !u!114 &1359760764
@@ -563,4 +613,5 @@ SceneRoots:
   m_Roots:
   - {fileID: 519420032}
   - {fileID: 619394802}
+  - {fileID: 1192435386}
   - {fileID: 1359760762}

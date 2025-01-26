@@ -15,14 +15,14 @@ public class RoleManager : MonoBehaviour
 
     private void AssignRoleOnUpdate(ref int currentCount, int neededCount, string role)
     {
-        foreach (var agent in FindObjectsByType<AgentBase>(FindObjectsSortMode.None))
+        foreach (var agent in FindObjectsByType<RoleBase>(FindObjectsSortMode.None))
         {
             if (currentCount >= neededCount)
                 break;
 
             if (agent != null && string.IsNullOrEmpty(agent.AgentRole) && agent.GetComponent<RoleBase>() == null)
             {
-                agent.ChangeRole(role);
+                agent.AssignRoleToAgent(role);
                 currentCount++;
             }
         }

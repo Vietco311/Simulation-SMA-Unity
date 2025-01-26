@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,19 +12,17 @@ public class ConstructionRequest : MonoBehaviour
     public int constructionProgress = 0;
     public int constructionSpeed = 1;
     public Dictionary<string, int> resourceNeededForHouse;
-    public string HouseType { get; set; }
+    public delegate void ResourcesNeededHandler(ConstructionRequest request);
+    public event ResourcesNeededHandler OnResourcesNeeded;
+    public event Action OnResourcesDelivered; 
     public GameObject ConstructedHouse { get; set; }
     public Vector3 ConstructionSitePosition { get; set; }
-
-    public List<AgentBase> CoupleAgents { get; set; }
-
-    public Dictionary<string, int> ResourceNeededForHouse => resourceNeededForHouse;
+    public List<AgentBase> CoupleAgents;
 
     public bool isReadyForConstruction => isReady;
 
     private void Start()
     {
-        MoveAgentsToConstruction(ConstructionSitePosition);
     }
 
     public void SetResourcesNeeded(Dictionary<string, int> resources)
@@ -48,33 +47,33 @@ public class ConstructionRequest : MonoBehaviour
             }
         }
 
-        // Vérifiez si toutes les ressources nécessaires ont été livrées  
         if (AreResourcesFulfilled())
         {
-            DeliveringAgent.RemoveDeliverRequest(this);
             Debug.Log("Toutes les ressources nécessaires ont été livrées.");
+            OnResourcesDelivered?.Invoke(); // Notifier que les ressources sont livrées
+        }
+        else
+        {
+            Debug.Log("Ressources nécessaires non complètes, déclenchement de OnResourcesNeeded.");
+            OnResourcesNeeded?.Invoke(this); 
         }
     }
 
-
-    public IEnumerator AdvanceConstruction(GameObject housePrefab, BuilderAgent builderAgent)
+    public IEnumerator AdvanceConstruction(AgentBase agent)
     {
-        Debug.Log($"IsConstructed {IsConstructed} isReady {isReady} AreResourcesFulfilled {AreResourcesFulfilled()}");
         if (IsConstructed || !isReady || !AreResourcesFulfilled()) yield break;
 
         while (constructionProgress < 100)
         {
-            if (builderAgent.agentBase.IsResting() || builderAgent.agentBase.IsSleepingOnGround())
-                yield return new WaitUntil(() => !builderAgent.agentBase.IsResting() && !builderAgent.agentBase.IsSleepingOnGround());
+            if (agent.IsResting() || agent.IsSleepingOnGround())
+                yield return new WaitUntil(() => !agent.IsResting() && !agent.IsSleepingOnGround());
             yield return new WaitForSeconds(1);
             constructionProgress += constructionSpeed;
-            Debug.Log($"Construction à {constructionProgress}%");
 
             if (constructionProgress >= 100)
             {
                 constructionProgress = 100;
-                ConstructHouse(housePrefab);
-                Debug.Log("Construction de la maison terminée !");
+                ConstructHouse();
                 yield break;
             }
         }
@@ -88,15 +87,15 @@ public class ConstructionRequest : MonoBehaviour
         }
         return true;
     }
-    private void ConstructHouse(GameObject housePrefab)
+
+    private void ConstructHouse()
     {
-        ConstructedHouse = Instantiate(housePrefab, ConstructionSitePosition, Quaternion.identity);
+        var clone = Instantiate(ConstructedHouse, ConstructionSitePosition, Quaternion.identity);
         foreach (var agent in CoupleAgents)
         {
             agent.CurrentRequest = null;
-            agent.assignedHouse = ConstructedHouse;
-            Debug.Log($"{agent.name} a reçu une maison.");
-        }      
+            agent.assignedHouse = clone;
+        }
         StartCoroutine(DestroyAfterDelay());
     }
 
@@ -104,18 +103,5 @@ public class ConstructionRequest : MonoBehaviour
     {
         yield return new WaitForSeconds(2);
         Destroy(gameObject);
-    }
-
-    public void MoveAgentsToConstruction(Vector3 housePosition)
-    {
-        foreach (AgentBase cAgent in CoupleAgents)
-        {
-            if (!cAgent.isMoving)
-            {
-
-                cAgent.MoveTo(housePosition);
-            }
-
-        }
     }
 }

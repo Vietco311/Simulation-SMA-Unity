@@ -1,4 +1,5 @@
 using System;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class GridManager : MonoBehaviour
@@ -6,32 +7,50 @@ public class GridManager : MonoBehaviour
     public GameObject stoneResourcePrefab;
     public GameObject woodResourcePrefab;
     public int width = 30;
-    public int height = 30; 
+    public int height = 30;
     public GameObject tilePrefab;
-    public GameObject agentPrefab;
+    public GameObject builderPrefab;
+    public GameObject explorerPrefab;
+    public GameObject deliveringPrefab;
+    public GameObject collectorPrefab;
+    public GameObject joblessPrefab;
+    public GameObject villagerPrefab;
     public GameObject woodStoragePrefab;
     public GameObject stoneStoragePrefab;
-    private int totalPeople;
-    private int totalCollector;
-    private int totalBuilder;
-    private int totalDelivery;
-    private int totalExplorer;
-    private int totalJobless;
+    private Vector3 offset;
 
-
-    private Vector3 offset; // Déclare un offset global pour l'alignement
-
-    void Start()
+    public void StartSimulation(string simulationType)
     {
-        offset = new Vector3(-width / 2, -height / 2, 0); // Calcule l'offset une seule fois
+        if (simulationType == "original")
+        {
+            SpawnerOriginal spawner = this.AddComponent<SpawnerOriginal>();
+            spawner.builderPrefab = this.builderPrefab;
+            spawner.explorerPrefab = this.explorerPrefab;
+            spawner.deliveringPrefab = this.deliveringPrefab;
+            spawner.collectorPrefab = this.collectorPrefab;
+            spawner.joblessPrefab = this.joblessPrefab;
+        }
+        else if (simulationType == "simple")
+        {
+            SpawnerSimple spawner = this.AddComponent<SpawnerSimple>();
+            spawner.agentPrefab = this.villagerPrefab;
+        }
+        else
+        {
+            Debug.LogError("Type de simulation inconnu.");
+        }
+    }
+
+    protected virtual void Start()
+    {
+        offset = new Vector3(-width / 2, -height / 2, 0);
         GenerateGrid();
         CenterCamera();
         SpawnResources();
         Vector3 storageWPosition = new Vector3(-1, 0, 0);
         Instantiate(woodStoragePrefab, storageWPosition, Quaternion.identity);
         Vector3 storageSPosition = new Vector3(1, 0, 0);
-        Instantiate(stoneStoragePrefab, storageSPosition, Quaternion.identity);    
-        SpawnPopulation(10);
+        Instantiate(stoneStoragePrefab, storageSPosition, Quaternion.identity);
     }
 
     private void Update()
@@ -51,16 +70,7 @@ public class GridManager : MonoBehaviour
         }
     }
 
-    void SpawnPopulation(int count)
-    {
-        for (int i = 0; i < count; i++)
-        {
-            Vector3 spawnPosition = new Vector3(UnityEngine.Random.Range(-width / 2, width / 2), UnityEngine.Random.Range(-height / 2, height / 2), 0);
-            GameObject agent = Instantiate(agentPrefab, spawnPosition, Quaternion.identity);
-        }
-        
-    }
-
+    protected virtual void SpawnPopulation(int count) { }
 
     void SpawnResources()
     {
